@@ -1,0 +1,35 @@
+{
+  "name": "techtok-inventory",
+  "version": "1.0.3",
+  "description": "TechTok Inventory & Ledger App",
+  "main": "main.js",
+  "author": "TechTok",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.techtok.inventory",
+    "productName": "TechTok Inventory",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "techtokke",
+        "repo": "TechTokApp"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/logo.png"
+    }
+  },
+  "dependencies": {
+    "electron-log": "^5.1.8",
+    "electron-updater": "^6.2.1"
+  },
+  "devDependencies": {
+    "electron": "^39.1.2",
+    "electron-builder": "^24.13.3"
+  }
+}

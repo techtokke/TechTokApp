@@ -1,0 +1,2508 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 
+      CSP (Content Security Policy) is important for Electron security.
+      This is a basic one. For production, you'd want to make it stricter,
+      especially around 'script-src'.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory & Ledger</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: '#136dec',
+              success: '#50E3C2',
+              warning: '#F5A623',
+              danger: '#D0021B',
+            },
+            fontFamily: { display: ['Manrope', 'Noto Sans', 'sans-serif'] },
+          },
+        },
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body,
+      .font-display {
+        font-family: 'Manrope', 'Noto Sans', 'sans-serif';
+      }
+      body {
+        min-height: 100vh;
+        overflow: hidden; /* Prevent body scroll, allow inner elements */
+      }
+      /* Fix for icon button alignment */
+      .material-symbols-outlined.md-18 {
+        font-size: 18px;
+      }
+      /* Custom title bar hover states */
+      #minimize-btn:hover,
+      #maximize-btn:hover {
+        background-color: rgba(128, 128, 128, 0.2);
+      }
+      #close-btn:hover {
+        background-color: #d0021b;
+        color: white;
+      }
+      #close-btn:hover svg {
+        stroke: white;
+      }
+    </style>
+  </head>
+  <body class="font-display bg-gray-50 dark:bg-gray-900">
+    <!-- 
+      NEW: Custom Frameless Title Bar 
+      -webkit-app-region: drag allows dragging the window from this bar.
+    -->
+    <div
+      id="title-bar"
+      class="fixed top-0 left-0 right-0 h-8 flex justify-between items-center bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-50"
+      style="-webkit-app-region: drag"
+    >
+      <!-- Left side: Logo and Title -->
+      <div class="flex items-center pl-3">
+        <img
+          src="https://i.postimg.cc/Qxg0rJnW/Screenshot-20250713-185029-Tik-Tok.png"
+          class="w-5 h-5 rounded-full"
+          alt="Logo"
+          style="-webkit-app-region: no-drag"
+        />
+        <span
+          class="pl-2 text-xs font-medium text-gray-700 dark:text-gray-300"
+          >TechTok Inventory</span
+        >
+      </div>
+      <!-- Right side: Window Controls -->
+      <div class="flex items-center" style="-webkit-app-region: no-drag">
+        <button
+          id="minimize-btn"
+          class="h-8 w-12 flex justify-center items-center transition-colors duration-150"
+          title="Minimize"
+        >
+          <svg
+            width="10"
+            height="1"
+            viewBox="0 0 10 1"
+            class="stroke-current text-gray-900 dark:text-gray-100"
+            stroke-width="1.5"
+          >
+            <path d="M0,0.5 L10,0.5"></path>
+          </svg>
+        </button>
+        <button
+          id="maximize-btn"
+          class="h-8 w-12 flex justify-center items-center transition-colors duration-150"
+          title="Maximize"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            class="fill-none stroke-current text-gray-900 dark:text-gray-100"
+            stroke-width="1.2"
+          >
+            <rect x="0.5" y="0.5" width="9" height="9"></rect>
+          </svg>
+        </button>
+        <button
+          id="close-btn"
+          class="h-8 w-12 flex justify-center items-center transition-colors duration-150"
+          title="Close"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            class="stroke-current text-gray-900 dark:text-gray-100"
+            stroke-width="1.5"
+          >
+            <path d="M0.5,0.5 L9.5,9.5 M9.5,0.5 L0.5,9.5"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 
+      NEW: Auto-update Notification Banner 
+    -->
+    <div
+      id="update-notification"
+      class="hidden fixed bottom-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg z-[100] flex items-center gap-4"
+    >
+      <p class="font-medium">A new update is ready!</p>
+      <button
+        id="restart-app-btn"
+        class="px-3 py-1 bg-white text-green-700 font-bold rounded hover:bg-gray-100"
+      >
+        Restart & Install
+      </button>
+    </div>
+
+    <!-- 
+      MODIFIED: Added 'pt-8' to account for the 8-unit (2rem) title bar
+    -->
+    <div
+      id="loginScreen"
+      class="fixed inset-0 pt-8 bg-gray-100 dark:bg-gray-800 flex items-center justify-center p-4 z-40"
+    >
+      <div
+        class="w-full max-w-sm bg-white dark:bg-gray-900 p-8 rounded-xl shadow-2xl"
+      >
+        <img
+          src="https://i.postimg.cc/Qxg0rJnW/Screenshot-20250713-185029-Tik-Tok.png"
+          class="mx-auto mb-4 rounded-full w-24 h-24"
+          alt="Logo"
+        />
+        <h2
+          class="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100"
+        >
+          TechTok
+        </h2>
+        <input
+          id="loginEmail"
+          type="email"
+          placeholder="Email"
+          class="w-full mb-4 p-3 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:ring-primary focus:border-primary"
+        />
+        <input
+          id="loginPassword"
+          type="password"
+          placeholder="Password"
+          class="w-full mb-4 p-3 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-700 dark:text-white focus:ring-primary focus:border-primary"
+        />
+
+        <div class="text-right mb-4">
+          <button
+            id="resetPasswordBtn"
+            type="button"
+            class="text-sm text-primary hover:underline focus:outline-none"
+          >
+            Forgot Password?
+          </button>
+        </div>
+
+        <p id="loginError" class="text-danger text-sm mb-4 hidden">
+          Invalid email or password.
+        </p>
+        <button
+          id="loginBtn"
+          class="w-full bg-primary hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-150"
+        >
+          Sign In
+        </button>
+      </div>
+    </div>
+
+    <!-- 
+      MODIFIED: Added 'pt-8' to account for the title bar 
+    -->
+    <div id="appContainer" class="min-h-screen flex flex-col pt-8 hidden">
+      <!-- 
+        MODIFIED: Changed 'sticky top-0' to 'sticky top-8' 
+      -->
+      <header
+        class="sticky top-8 z-10 flex items-center justify-between border-b border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+      >
+        <div class="flex items-center gap-4">
+          <button
+            id="menuBtn"
+            class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
+          >
+            <span class="material-symbols-outlined text-2xl">menu</span>
+          </button>
+          <h1
+            id="pageTitle"
+            class="text-xl font-bold text-gray-900 dark:text-gray-100"
+          >
+            Inventory
+          </h1>
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            id="addBtn"
+            class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+          >
+            <span class="material-symbols-outlined">add</span>
+            <span id="addBtnLabel">Add New Item</span>
+          </button>
+
+          <div class="relative">
+            <button
+              id="userMenuBtn"
+              class="flex items-center gap-2 focus:outline-none"
+            >
+              <div class="relative">
+                <img
+                  id="userAvatar"
+                  src="https://placehold.co/40x40"
+                  class="w-10 h-10 rounded-full border-2 border-primary object-cover"
+                />
+              </div>
+              <span
+                id="usernameDisplay"
+                class="font-medium text-gray-800 dark:text-gray-200"
+                >User</span
+              >
+              <span class="material-symbols-outlined text-gray-600 dark:text-gray-300"
+                >expand_more</span
+              >
+            </button>
+
+            <div
+              id="userDropdown"
+              class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700"
+            >
+              <button
+                id="openSettings"
+                class="block w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                User Settings
+              </button>
+              <button
+                id="openLogs"
+                class="block w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                Logs
+              </button>
+              <button
+                id="logoutBtn"
+                class="block w-full text-left px-4 py-2 text-danger font-medium hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 
+        MODIFIED: Sidebar also needs 'top-8' (header height) + 'top-8' (title bar) = 'top-16' 
+      -->
+      <div
+        id="sidebar"
+        class="hidden fixed left-0 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 shadow-lg z-20"
+        style="top: 4.5rem; bottom: 0"
+      >
+        <!-- 4.5rem = 8 (title) + 3.5 (header) approx. Let's align with header. -->
+        <nav class="p-4 space-y-3">
+          <button
+            id="navInventory"
+            class="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100"
+          >
+            Inventory
+          </button>
+          <button
+            id="navLedger"
+            class="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-900 dark:text-gray-100"
+          >
+            Ledger
+          </button>
+        </nav>
+      </div>
+
+      <main class="flex-1 p-4 md:p-6 overflow-y-auto">
+        <!-- Main content scrolls -->
+        <section id="inventorySection">
+          <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Search inventory..."
+              class="flex-1 rounded-lg border border-gray-300 p-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+            <button
+              id="filterStatus"
+              class="rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            >
+              Status
+            </button>
+          </div>
+
+          <div
+            class="hidden md:flex items-center p-4 bg-gray-100 dark:bg-gray-700 rounded-t-xl border-b border-gray-200 dark:border-gray-700"
+          >
+            <p class="text-sm font-bold text-gray-600 dark:text-gray-300 w-5/12">
+              Device
+            </p>
+            <p class="text-sm font-bold text-gray-600 dark:text-gray-300 w-1/12">
+              Date
+            </p>
+            <p class="text-sm font-bold text-gray-600 dark:text-gray-300 w-2/12">
+              Status
+            </p>
+            <p class="text-sm font-bold text-gray-600 dark:text-gray-300 w-2/12">
+              Cost
+            </p>
+            <p class="text-sm font-bold text-gray-600 dark:text-gray-300 w-2/12">
+              Selling
+            </p>
+            <p
+              class="text-sm font-bold text-gray-600 dark:text-gray-300 w-1/12 text-center"
+            >
+              Action
+            </p>
+          </div>
+
+          <div
+            class="overflow-hidden rounded-b-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+          >
+            <ul
+              id="inventoryList"
+              class="flex flex-col divide-y divide-gray-200 dark:divide-gray-700"
+            ></ul>
+          </div>
+        </section>
+
+        <section id="ledgerSection" class="hidden">
+          <div class="flex justify-between mb-4 items-center">
+            <h2
+              class="text-lg font-bold text-gray-900 dark:text-gray-100"
+            >
+              Financial Overview
+            </h2>
+            <button
+              id="addLedgerBtn"
+              class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+            >
+              <span class="material-symbols-outlined">add</span>
+              Add Transaction
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="rounded-lg bg-white dark:bg-gray-800 p-4 shadow">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Company Balance
+              </h3>
+              <p
+                id="companyFinance"
+                class="text-2xl font-bold text-gray-900 dark:text-gray-100"
+              >
+                KES 0.00
+              </p>
+            </div>
+            <div class="rounded-lg bg-white dark:bg-gray-800 p-4 shadow">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Inventory Value
+              </h3>
+              <p
+                id="inventoryValueDisplay"
+                class="text-2xl font-bold text-gray-900 dark:text-gray-100"
+              >
+                KES 0.00
+              </p>
+            </div>
+            <div class="rounded-lg bg-white dark:bg-gray-800 p-4 shadow">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Profit / Loss (Cash)
+              </h3>
+              <p
+                id="profitDisplay"
+                class="text-2xl font-bold text-gray-900 dark:text-gray-100"
+              >
+                KES 0.00
+              </p>
+            </div>
+          </div>
+          <div
+            class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+          >
+            <table class="w-full text-left">
+              <thead class="bg-gray-100 dark:bg-gray-700">
+                <tr>
+                  <th class="p-3 text-gray-700 dark:text-gray-200">Date</th>
+                  <th class="p-3 text-gray-700 dark:text-gray-200">
+                    Transaction
+                  </th>
+                  <th class="p-3 text-gray-700 dark:text-gray-200">
+                    Amount (KES)
+                  </th>
+                  <th class="p-3 text-gray-700 dark:text-gray-200">Type</th>
+                  <th class="p-3 text-gray-700 dark:text-gray-200">Actions</th>
+                </tr>
+              </thead>
+              <tbody
+                id="ledgerTable"
+                class="divide-y divide-gray-200 dark:divide-gray-700"
+              ></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- All Modals remain unchanged, they overlay everything -->
+
+    <div
+      id="itemModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
+      >
+        <h2
+          id="itemModalTitle"
+          class="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100"
+        >
+          Add New Item
+        </h2>
+        <input
+          id="itemName"
+          type="text"
+          placeholder="Item name"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="itemTracking"
+          type="text"
+          placeholder="Tracking Number"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="itemDetails"
+          type="text"
+          placeholder="Device Details (e.g., 256GB, 86%BH, Silver)"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="itemCostPrice"
+          type="number"
+          placeholder="Cost Price (KES)"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <select
+          id="itemStatus"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        >
+          <option value="In Stock">In Stock</option>
+          <option value="In Transit">In Transit</option>
+          <option value="Sold" disabled>Sold (Cannot be set manually)</option>
+        </select>
+        <input
+          id="itemPurchaseDate"
+          type="date"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="itemImage"
+          type="text"
+          placeholder="Image URL (optional)"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <div class="flex justify-between gap-2">
+          <button
+            id="deleteItemBtn"
+            class="hidden px-4 py-2 bg-danger text-white rounded"
+          >
+            Delete
+          </button>
+          <div class="flex justify-end gap-2">
+            <button
+              id="cancelItemBtn"
+              class="px-4 py-2 border rounded dark:border-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              id="saveItemBtn"
+              class="px-4 py-2 bg-primary text-white rounded"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="sellModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
+      >
+        <h2 class="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">
+          Sell Item
+        </h2>
+        <p
+          id="sellItemName"
+          class="font-semibold mb-2 text-gray-900 dark:text-gray-100"
+        ></p>
+        <input
+          id="sellPrice"
+          type="number"
+          placeholder="Selling Price (KES)"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="saleDate"
+          type="date"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="mpesaCode"
+          type="text"
+          placeholder="M-Pesa Transaction Code"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="customerName"
+          type="text"
+          placeholder="Customer Name"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="customerPhone"
+          type="text"
+          placeholder="Customer Phone Number"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            id="cancelSellBtn"
+            class="px-4 py-2 border rounded dark:border-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            id="confirmSellBtn"
+            class="px-4 py-2 bg-success text-white rounded"
+          >
+            Confirm Sale
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="ledgerModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
+      >
+        <h2
+          id="ledgerModalTitle"
+          class="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100"
+        >
+          Add Transaction
+        </h2>
+        <input
+          id="ledgerDate"
+          type="date"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="ledgerTransaction"
+          type="text"
+          placeholder="Transaction Description"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="ledgerAmount"
+          type="number"
+          placeholder="Amount (KES)"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <select
+          id="ledgerType"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        >
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
+          <option value="Injection">Injection</option>
+        </select>
+        <div class="flex justify-between gap-2">
+          <button
+            id="deleteLedgerBtn"
+            class="hidden px-4 py-2 bg-danger text-white rounded"
+          >
+            Delete
+          </button>
+          <div class="flex justify-end gap-2">
+            <button
+              id="cancelLedgerBtn"
+              class="px-4 py-2 border rounded dark:border-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              id="saveLedgerBtn"
+              class="px-4 py-2 bg-primary text-white rounded"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="detailsModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto"
+      >
+        <div class="flex justify-between items-center mb-4">
+          <h2
+            id="detailsModalTitle"
+            class="text-lg font-bold text-gray-900 dark:text-gray-100"
+          >
+            Item Details
+          </h2>
+          <button
+            id="closeDetailsBtn"
+            class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-6">
+          <img
+            id="detailsModalImage"
+            src=""
+            alt="Item Image"
+            class="w-full md:w-1/3 h-auto rounded-lg bg-gray-200 object-cover aspect-square"
+          />
+          <div class="flex-1 space-y-3">
+            <div
+              id="detailsModalName"
+              class="text-2xl font-bold text-gray-900 dark:text-white"
+            ></div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="detailsModalStatus" class="px-2 py-1 text-xs rounded-full"></span>
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                Tracking:
+                <span
+                  id="detailsModalTracking"
+                  class="font-medium text-gray-700 dark:text-gray-300"
+                ></span>
+              </p>
+            </div>
+
+            <p
+              class="text-2xl font-bold text-primary dark:text-primary-400"
+              id="detailsModalPrice"
+            ></p>
+            <p
+              class="text-sm text-gray-500 dark:text-gray-400"
+              id="detailsModalCostPrice"
+            ></p>
+
+            <div>
+              <h3 class="font-semibold text-gray-800 dark:text-gray-200">
+                Device Details
+              </h3>
+              <p
+                id="detailsModalDetails"
+                class="text-gray-600 dark:text-gray-400"
+              ></p>
+            </div>
+
+            <div
+              id="detailsModalCustomerInfo"
+              class="hidden pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2"
+            >
+              <h3 class="font-semibold text-gray-800 dark:text-gray-200">
+                Sale & Customer Information
+              </h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Sold For:</strong>
+                <span id="detailsModalSoldPrice"></span>
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Customer:</strong>
+                <span id="detailsModalCustomerName"></span>
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Phone:</strong>
+                <span id="detailsModalCustomerPhone"></span>
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>M-Pesa Code:</strong>
+                <span id="detailsModalMpesa"></span>
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Sale Date:</strong>
+                <span id="detailsModalSaleDate"></span>
+              </p>
+              <button
+                id="downloadReceiptBtn"
+                class="mt-2 flex items-center gap-2 text-sm text-primary hover:underline"
+              >
+                <span class="material-symbols-outlined md-18">download</span>
+                Download Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      The rest of the modals (userSettingsModal, logsModal)
+    -->
+    <div
+      id="userSettingsModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-md">
+        <h2
+          class="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100"
+        >
+          User Settings
+        </h2>
+        <input
+          id="settingsUsername"
+          type="text"
+          placeholder="Username"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+        <input
+          id="settingsProfileUrl"
+          type="text"
+          placeholder="Profile Picture URL"
+          class="w-full mb-3 rounded border p-2 dark:bg-gray-700 dark:text-white"
+        />
+
+        <div class="flex justify-end gap-2">
+          <button
+            id="cancelSettingsBtn"
+            class="px-4 py-2 border rounded dark:border-gray-600"
+          >
+            Cancel
+          </button>
+          <button
+            id="saveSettingsBtn"
+            class="px-4 py-2 bg-primary text-white rounded"
+          >
+            Save
+          </button>
+        </div>
+
+        <hr class="my-4 border-gray-500 opacity-40" />
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-200 mb-2">
+          Maintenance Tools
+        </h3>
+        <!-- 
+          MODIFIED: Replaced Emojis with Material Symbols Icons 
+        -->
+        <button
+          id="standardizeBtn"
+          class="mt-2 w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 hidden flex items-center justify-center gap-2"
+        >
+          <span class="material-symbols-outlined text-base">settings</span>
+          Run Ledger Standardization
+        </button>
+        <button
+          id="recalculateFinanceBtn"
+          class="mt-2 w-full bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800 hidden flex items-center justify-center gap-2"
+        >
+          <span class="material-symbols-outlined text-base">refresh</span>
+          Recalculate Finance Totals
+        </button>
+        <button
+          id="clearLogsBtn"
+          class="mt-2 w-full bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800 hidden flex items-center justify-center gap-2"
+        >
+          <span class="material-symbols-outlined text-base"
+            >cleaning_services</span
+          >
+          Clear Logs Older Than 30 Days
+        </button>
+        <button
+          id="revalidateInventoryBtn"
+          class="mt-2 w-full bg-gray-700 text-white py-2 rounded-lg hover:bg-gray-800 hidden flex items-center justify-center gap-2"
+        >
+          <span class="material-symbols-outlined text-base">checklist</span>
+          Revalidate Inventory Status
+        </button>
+      </div>
+    </div>
+
+    <div
+      id="logsModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-40 opacity-0 transition-opacity duration-300 hidden"
+    >
+      <div
+        class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto"
+      >
+        <h2 class="text-lg font-bold mb-4 text-gray-900 dark:text-gray-100">
+          Activity Logs
+        </h2>
+        <ul
+          id="logsList"
+          class="divide-y divide-gray-200 dark:divide-gray-700"
+        ></ul>
+        <div class="text-right mt-4">
+          <button
+            id="closeLogsBtn"
+            class="px-4 py-2 border rounded dark:border-gray-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 
+      Original Firebase App Script (Unchanged)
+    -->
+    <script type="module">
+      // 1. Import and initialize Firebase modules
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+      // MODIFICATION 5: Added sendPasswordResetEmail
+      import {
+        getAuth,
+        signInWithEmailAndPassword,
+        onAuthStateChanged,
+        signOut,
+        sendPasswordResetEmail,
+      } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+      // MODIFICATION 3: Added getDocs
+      import {
+        getFirestore,
+        collection,
+        addDoc,
+        updateDoc,
+        deleteDoc,
+        doc,
+        onSnapshot,
+        query,
+        orderBy,
+        getDoc,
+        serverTimestamp,
+        setDoc,
+        writeBatch,
+        getDocs,
+      } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+
+      // Your web app's Firebase configuration
+      const firebaseConfig = {
+        apiKey: 'AIzaSyCDXdAwUGZWYJT5fth7ZWSnAVRK5s0DaYs',
+        authDomain: 'stitch-inventory-app.firebaseapp.com',
+        projectId: 'stitch-inventory-app',
+        storageBucket: 'stitch-inventory-app.firebasestorage.app',
+        messagingSenderId: '847341760219',
+        appId: '1:847341760219:web:1492f7bef382bffe0826fe',
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      // Firestore Collection References
+      const inventoryCol = collection(db, 'inventory');
+      const ledgerCol = collection(db, 'ledger');
+      const salesCol = collection(db, 'sales');
+      const logsCol = collection(db, 'logs');
+
+      // Elements
+      const appContainer = document.getElementById('appContainer');
+      const loginScreen = document.getElementById('loginScreen');
+      const sidebar = document.getElementById('sidebar');
+      const menuBtn = document.getElementById('menuBtn');
+      const navInventory = document.getElementById('navInventory');
+      const navLedger = document.getElementById('navLedger');
+      const inventorySection = document.getElementById('inventorySection');
+      const ledgerSection = document.getElementById('ledgerSection');
+      const addBtn = document.getElementById('addBtn');
+      const addLedgerBtn = document.getElementById('addLedgerBtn');
+      const pageTitle = document.getElementById('pageTitle');
+      const addBtnLabel = document.getElementById('addBtnLabel');
+      const logoutBtn = document.getElementById('logoutBtn');
+
+      // Login Elements
+      const loginEmail = document.getElementById('loginEmail');
+      const loginPassword = document.getElementById('loginPassword');
+      const loginBtn = document.getElementById('loginBtn');
+      const loginError = document.getElementById('loginError');
+      // MODIFICATION 5: Added resetPasswordBtn element
+      const resetPasswordBtn = document.getElementById('resetPasswordBtn');
+
+      // Modals
+      const itemModal = document.getElementById('itemModal');
+      const itemModalTitle = document.getElementById('itemModalTitle');
+      const cancelItemBtn = document.getElementById('cancelItemBtn');
+      const saveItemBtn = document.getElementById('saveItemBtn');
+      const deleteItemBtn = document.getElementById('deleteItemBtn');
+
+      const sellModal = document.getElementById('sellModal');
+      const cancelSellBtn = document.getElementById('cancelSellBtn');
+      const confirmSellBtn = document.getElementById('confirmSellBtn');
+      const sellItemName = document.getElementById('sellItemName');
+
+      const ledgerModal = document.getElementById('ledgerModal');
+      const ledgerModalTitle = document.getElementById('ledgerModalTitle');
+      const cancelLedgerBtn = document.getElementById('cancelLedgerBtn');
+      const saveLedgerBtn = document.getElementById('saveLedgerBtn');
+      const deleteLedgerBtn = document.getElementById('deleteLedgerBtn');
+
+      const detailsModal = document.getElementById('detailsModal');
+      const closeDetailsBtn = document.getElementById('closeDetailsBtn');
+      const downloadReceiptBtn =
+        document.getElementById('downloadReceiptBtn');
+
+      const ledgerTable = document.getElementById('ledgerTable');
+      const companyFinance = document.getElementById('companyFinance');
+      const profitDisplay = document.getElementById('profitDisplay');
+      // MODIFICATION 1: Added inventoryValueDisplay element
+      const inventoryValueDisplay = document.getElementById(
+        'inventoryValueDisplay'
+      );
+
+      // Input fields
+      const itemName = document.getElementById('itemName');
+      const itemTracking = document.getElementById('itemTracking');
+      const itemDetails = document.getElementById('itemDetails');
+      const itemCostPrice = document.getElementById('itemCostPrice');
+      const itemSellingPrice =
+        document.getElementById('itemSellingPrice');
+      const itemStatus = document.getElementById('itemStatus');
+      const itemImage = document.getElementById('itemImage');
+      const itemPurchaseDate =
+        document.getElementById('itemPurchaseDate');
+
+      const ledgerDate = document.getElementById('ledgerDate');
+      const ledgerTransaction =
+        document.getElementById('ledgerTransaction');
+      const ledgerAmount = document.getElementById('ledgerAmount');
+      const ledgerType = document.getElementById('ledgerType');
+
+      // Sell fields
+      const sellPrice = document.getElementById('sellPrice');
+      const mpesaCode = document.getElementById('mpesaCode');
+      const customerName = document.getElementById('customerName');
+      const customerPhone = document.getElementById('customerPhone');
+      const saleDateInput = document.getElementById('saleDate');
+
+      // Filter elements
+      const searchInput = document.getElementById('searchInput');
+      const filterStatusBtn = document.getElementById('filterStatus');
+
+      const userMenuBtn = document.getElementById('userMenuBtn');
+      const userDropdown = document.getElementById('userDropdown');
+      userMenuBtn.onclick = () => userDropdown.classList.toggle('hidden');
+      document.addEventListener('click', (e) => {
+        if (
+          !userMenuBtn.contains(e.target) &&
+          !userDropdown.contains(e.target)
+        )
+          userDropdown.classList.add('hidden');
+      });
+
+      const openSettings = document.getElementById('openSettings');
+      const userSettingsModal =
+        document.getElementById('userSettingsModal');
+      const cancelSettingsBtn =
+        document.getElementById('cancelSettingsBtn');
+      const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+      const settingsUsername =
+        document.getElementById('settingsUsername');
+      const settingsProfileUrl =
+        document.getElementById('settingsProfileUrl');
+      const usernameDisplay = document.getElementById('usernameDisplay');
+      const userAvatar = document.getElementById('userAvatar');
+      // MODIFICATION 4: Removed old standardizeBtn element reference
+
+      openSettings.onclick = async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          const d = snap.data();
+          settingsUsername.value = d.username || '';
+          settingsProfileUrl.value = d.profilePicUrl || '';
+        }
+        // MODIFICATION 6: Use showModal
+        showModal(userSettingsModal);
+      };
+      // MODIFICATION 6: Use hideModal
+      cancelSettingsBtn.onclick = () => hideModal(userSettingsModal);
+      saveSettingsBtn.onclick = async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(
+          userRef,
+          {
+            username: settingsUsername.value,
+            profilePicUrl: settingsProfileUrl.value,
+          },
+          { merge: true } // merge keeps old data and creates if missing
+        );
+        // Immediately update UI
+        usernameDisplay.textContent = settingsUsername.value;
+        userAvatar.src =
+          settingsProfileUrl.value || 'https://placehold.co/40x40';
+        // MODIFICATION 6: Use hideModal
+        hideModal(userSettingsModal);
+      };
+
+      const openLogs = document.getElementById('openLogs');
+      const logsModal = document.getElementById('logsModal');
+      const closeLogsBtn = document.getElementById('closeLogsBtn');
+      const logsList = document.getElementById('logsList');
+
+      openLogs.onclick = () => {
+        // MODIFICATION 6: Use showModal
+        showModal(logsModal);
+        onSnapshot(
+          query(logsCol, orderBy('timestamp', 'desc')),
+          (snap) => {
+            logsList.innerHTML = snap.docs
+              .map((d) => {
+                const l = d.data();
+                const t =
+                  l.timestamp?.toDate?.().toLocaleString() || '';
+                return `<li class="py-2 text-sm text-gray-700 dark:text-gray-200">${t} — ${l.userEmail}: ${l.action}</li>`;
+              })
+              .join('');
+          }
+        );
+      };
+      // MODIFICATION 6: Use hideModal
+      closeLogsBtn.onclick = () => hideModal(logsModal);
+
+      // State
+      let inventory = [];
+      let ledger = [];
+      let editingItemId = null; // Use Firestore document ID
+      let editingLedgerId = null; // Use Firestore document ID
+      let currentItemForReceipt = null; // Holds the full item object for details/receipt
+      let currentStatusFilter = 'All'; // New state for the status filter
+
+      // --- Firebase Auth Logic ---
+
+      async function logAction(action) {
+        const user = auth.currentUser;
+        if (!user) return;
+        try {
+          await addDoc(logsCol, {
+            userEmail: user.email,
+            userId: user.uid,
+            action,
+            timestamp: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error('Error logging action: ', e);
+        }
+      }
+
+      // Handle login
+      loginBtn.onclick = async () => {
+        const email = loginEmail.value;
+        const password = loginPassword.value;
+        loginError.classList.add('hidden');
+        loginBtn.disabled = true;
+
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          await logAction('Logged in');
+        } catch (error) {
+          console.error('Login Error:', error.code, error.message);
+          loginError.textContent = 'Invalid email or password.';
+          loginError.classList.remove('hidden');
+          loginError.classList.remove('text-green-600');
+          loginError.classList.add('text-danger');
+        } finally {
+          loginBtn.disabled = false;
+        }
+      };
+
+      // Handle logout
+      logoutBtn.onclick = async () => {
+        try {
+          await logAction('Logged out');
+          await signOut(auth);
+        } catch (error) {
+          console.error('Logout Error:', error.message);
+        }
+      };
+
+      // MODIFICATION 5: Added password reset logic
+      resetPasswordBtn.onclick = async () => {
+        const email =
+          loginEmail.value ||
+          prompt('Enter your email to reset password:');
+        if (!email) {
+          loginError.textContent =
+            'Email is required for password reset.';
+          loginError.classList.remove('hidden');
+          loginError.classList.remove('text-green-600');
+          loginError.classList.add('text-danger');
+          return;
+        }
+
+        loginError.classList.add('hidden'); // Hide error before trying
+
+        try {
+          await sendPasswordResetEmail(auth, email);
+          loginError.textContent =
+            'Password reset email sent! Check your inbox.';
+          loginError.classList.remove('hidden', 'text-danger');
+          loginError.classList.add('text-green-600');
+        } catch (error) {
+          console.error('Password Reset Error:', error.message);
+          loginError.textContent =
+            'Error: Could not send reset email.';
+          loginError.classList.remove('hidden', 'text-green-600');
+          loginError.classList.add('text-danger');
+        }
+      };
+
+      // Handle authentication state change
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          // User is signed in, show app
+          loginScreen.classList.add('hidden');
+          appContainer.classList.remove('hidden');
+          // Initialize real-time listeners for data
+          setupFirestoreListeners();
+
+          // Reference the Firestore users collection by UID
+          const userRef = doc(db, 'users', user.uid);
+
+          // Check if a profile document exists
+          const snap = await getDoc(userRef);
+
+          // If missing, create a default empty one (ensures every user has a record)
+          if (!snap.exists()) {
+            await setDoc(userRef, {
+              username: '',
+              profilePicUrl: '',
+            });
+          }
+
+          // Fetch profile data (freshly created or existing)
+          const data = (await getDoc(userRef)).data();
+
+          // Update header display
+          usernameDisplay.textContent = data.username || user.email;
+          userAvatar.src =
+            data.profilePicUrl || 'https://placehold.co/40x40';
+
+          // MODIFICATION 4: Removed old admin button logic
+          // Show all maintenance buttons for logged-in users
+          [
+            'standardizeBtn',
+            'recalculateFinanceBtn',
+            'clearLogsBtn',
+            'revalidateInventoryBtn',
+          ].forEach((id) => {
+            const btn = document.getElementById(id);
+            if (btn) btn.classList.remove('hidden');
+          });
+
+          // Keep layout balance intact
+          userDropdown.classList.add('hidden');
+        } else {
+          // User is signed out, show login
+          loginScreen.classList.remove('hidden');
+          appContainer.classList.add('hidden');
+          // Clear inputs on sign out
+          loginEmail.value = '';
+          loginPassword.value = '';
+        }
+      });
+
+      // --- Firestore Listeners ---
+
+      let inventoryUnsubscribe = null;
+      let ledgerUnsubscribe = null;
+
+      function setupFirestoreListeners() {
+        // Inventory Listener
+        if (inventoryUnsubscribe) inventoryUnsubscribe(); // Detach previous listener
+
+        inventoryUnsubscribe = onSnapshot(
+          inventoryCol,
+          (snapshot) => {
+            inventory = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            renderInventory(searchInput.value);
+            updateFinance(); // MODIFICATION 2: This call updates all 3 cards
+          },
+          (error) => {
+            console.error(
+              'Inventory Snapshot Error:',
+              error.message
+            );
+          }
+        );
+
+        // Ledger Listener (Order by date descending for better viewing)
+        if (ledgerUnsubscribe) ledgerUnsubscribe(); // Detach previous listener
+
+        const ledgerQuery = query(
+          ledgerCol,
+          orderBy('timestamp', 'desc')
+        );
+        ledgerUnsubscribe = onSnapshot(
+          ledgerQuery,
+          (snapshot) => {
+            ledger = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            renderLedger();
+            updateFinance(); // MODIFICATION 2: This call updates all 3 cards
+          },
+          (error) => {
+            console.error('Ledger Snapshot Error:', error.message);
+          }
+        );
+      }
+
+      let inactivityTimer;
+      function resetTimer() {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+          if (auth.currentUser) {
+            logAction('Auto-logged out due to inactivity');
+            signOut(auth);
+          }
+        }, 30 * 60 * 1000); // 30 minutes
+      }
+      ['click', 'keydown', 'mousemove', 'scroll'].forEach((e) =>
+        window.addEventListener(e, resetTimer)
+      );
+      resetTimer();
+
+      // --- Rendering ---
+
+      const list = document.getElementById('inventoryList');
+      function renderInventory(filter = '') {
+        list.innerHTML = '';
+        const searchTerm = filter.toLowerCase();
+
+        const filteredInventory = inventory.filter((i) => {
+          // Text search check
+          const matchesSearch =
+            i.name.toLowerCase().includes(searchTerm) ||
+            (i.tracking &&
+              i.tracking.toLowerCase().includes(searchTerm)) ||
+            (i.details &&
+              i.details.toLowerCase().includes(searchTerm));
+
+          // Status filter check
+          const matchesStatus =
+            currentStatusFilter === 'All'
+              ? true
+              : i.status === currentStatusFilter;
+
+          return matchesSearch && matchesStatus;
+        });
+
+        if (filteredInventory.length === 0) {
+          list.innerHTML = `<li class="p-6 text-center text-gray-500 dark:text-gray-400">No items found.</li>`;
+          return;
+        }
+
+        filteredInventory.forEach((item) => {
+          const li = document.createElement('li');
+          li.className =
+            'flex flex-col md:flex-row md:items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700';
+
+          let statusClass = '';
+          switch (item.status) {
+            case 'In Stock':
+              statusClass = 'bg-success/20 text-green-800';
+              break;
+            case 'In Transit':
+              statusClass = 'bg-warning/20 text-yellow-800';
+              break;
+            case 'Sold':
+              statusClass = 'bg-danger/20 text-red-800';
+              break;
+          }
+
+          li.innerHTML = `
+            <div class='flex items-start gap-4 flex-1 md:w-5/12 pr-4'>
+              <div class='aspect-square size-16 rounded-lg bg-gray-200 bg-cover bg-center flex-shrink-0' style='background-image:url(${
+                item.image
+              })' onerror="this.style.backgroundImage='url(https://placehold.co/100x100/eeeeee/cccccc?text=Image)'"></div>
+              
+              <div class="flex-1">
+                <p class='font-bold text-gray-900 dark:text-white'>
+                  <button type="button" class="text-left hover:underline" onclick="openDetails('${
+                    item.id
+                  }')">${item.name}</button>
+                </p>
+                <p class='text-sm text-gray-500 dark:text-gray-400'>Tracking: ${
+                  item.tracking
+                }</p>
+                <p class='text-sm text-gray-400 dark:text-gray-500 truncate w-full' title="${
+                  item.details
+                }">${item.details}</p>
+              </div>
+            </div>
+            
+            <div class='mt-4 md:mt-0 md:w-1/12'>
+              <p class='text-xs text-gray-500 dark:text-gray-400 md:hidden'>Date</p>
+              <p class='text-sm text-gray-500 dark:text-gray-400'>${
+                item.purchaseDate || ''
+              }</p>
+            </div>
+
+            <div class="mt-4 md:mt-0 md:w-2/12">
+              <span class='px-2 py-1 text-xs rounded-full ${statusClass}'>${
+            item.status
+          }</span>
+            </div>
+
+            <div class='mt-4 md:mt-0 md:w-2/12'>
+              <p class='text-xs text-gray-500 dark:text-gray-400 md:hidden'>Cost</p>
+              <p class='font-medium text-gray-800 dark:text-gray-100'>KES ${item.costPrice.toLocaleString()}</p>
+            </div>
+
+            <div class='mt-4 md:mt-0 md:w-2/12'>
+              <p class='text-xs text-gray-500 dark:text-gray-400 md:hidden'>Selling</p>
+              <p class='font-bold text-gray-800 dark:text-gray-100'>KES ${
+                item.sellingPrice
+                  ? item.sellingPrice.toLocaleString()
+                  : 'N/A'
+              }</p>
+            </div>
+            
+            <div class='mt-4 md:mt-0 md:w-1/12 flex items-center gap-2'>
+              <button 
+                class='p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700' 
+                onclick='openEditItem("${item.id}")'
+                title="Edit Item">
+                <span class="material-symbols-outlined md-18 text-gray-600 dark:text-gray-300">edit</span>
+              </button>
+
+              <button 
+                class='px-2 py-1 rounded-full text-white ${
+                  item.status === 'Sold'
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-success hover:bg-green-500'
+                }' 
+                onclick='openSell("${item.id}")'
+                title="Sell Item"
+                ${item.status === 'Sold' ? 'disabled' : ''}>
+                <span class="material-symbols-outlined md-18">payments</span>
+              </button>
+            </div>
+          `;
+          list.appendChild(li);
+        });
+      }
+
+      function renderLedger() {
+        ledgerTable.innerHTML = '';
+        if (ledger.length === 0) {
+          ledgerTable.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-500 dark:text-gray-400">No transactions yet.</td></tr>`;
+          return;
+        }
+        ledger.forEach((entry) => {
+          const tr = document.createElement('tr');
+          const typeClass =
+            entry.type === 'income' || entry.type === 'Injection'
+              ? 'bg-success/20 text-green-800'
+              : entry.type === 'expense'
+              ? 'bg-danger/20 text-red-800'
+              : 'bg-gray-200 text-gray-700'; // Handle 'deletion'
+
+          // Format date from timestamp
+          const date = entry.timestamp?.toDate
+            ? entry.timestamp.toDate().toLocaleDateString()
+            : entry.date || '';
+          const capitalType =
+            entry.type.charAt(0).toUpperCase() + entry.type.slice(1);
+
+          tr.innerHTML = `<td class='p-3 text-gray-800 dark:text-gray-200'>${date}</td>
+                          <td class='p-3 text-gray-800 dark:text-gray-200'>${
+                            entry.description
+                          }</td>
+                          <td class='p-3 text-gray-800 dark:text-gray-200'>${
+                            entry.amount
+                              ? 'KES ' + entry.amount.toLocaleString()
+                              : 'N/A'
+                          }</td>
+                          <td class='p-3'><span class='px-2 py-0.5 text-xs rounded-full ${typeClass}'>${capitalType}</span></td>
+                          <td class='p-3'>
+                            <button class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" onclick="openEditLedger('${
+                              entry.id
+                            }')">
+                              <span class="material-symbols-outlined md-18 text-gray-600 dark:text-gray-300">edit</span>
+                            </button>
+                          </td>`;
+          ledgerTable.appendChild(tr);
+        });
+      }
+
+      // MODIFICATION 1 & 2: updateFinance now updates all 3 cards
+      function updateFinance() {
+        const income = ledger
+          .filter(
+            (l) => l.type === 'income' || l.type === 'Injection'
+          )
+          .reduce((a, b) => a + (b.amount || 0), 0);
+        const expense = ledger
+          .filter((l) => l.type === 'expense')
+          .reduce((a, b) => a + (b.amount || 0), 0);
+
+        // This is your cash balance (Profit/Loss in cash terms)
+        const cashBalance = income - expense;
+
+        // This is the value of all unsold inventory
+        // This calculation fulfills the requirement for the "Inventory Value" card
+        const inventoryValue = inventory
+          .filter(
+            (i) =>
+              i.status === 'In Stock' || i.status === 'In Transit'
+          ) // Explicitly check for "In Stock" or "In Transit"
+          .reduce((acc, item) => acc + (item.costPrice || 0), 0);
+
+        // Company Balance = Cash + Value of Assets (Unsold Inventory)
+        const totalBalance = cashBalance + inventoryValue;
+
+        // Update all three cards
+        companyFinance.textContent = `KES ${totalBalance.toLocaleString()}`;
+        inventoryValueDisplay.textContent = `KES ${inventoryValue.toLocaleString()}`;
+        profitDisplay.textContent = `KES ${cashBalance.toLocaleString()}`;
+
+        companyFinance.classList.toggle(
+          'text-red-500',
+          totalBalance < 0
+        );
+        inventoryValueDisplay.classList.toggle(
+          'text-red-500',
+          inventoryValue < 0
+        ); // Should not be < 0, but good for consistency
+        profitDisplay.classList.toggle('text-red-500', cashBalance < 0);
+      }
+
+      // MODIFICATION 3: Added Ledger Standardization Function
+      async function standardizeLedger() {
+        console.log('Starting ledger standardization...');
+        try {
+          const batch = writeBatch(db);
+          const ledgerQuery = query(ledgerCol);
+          // Use getDocs for a one-time fetch
+          const snapshot = await getDocs(ledgerQuery);
+
+          let updates = 0;
+
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            const updateData = {};
+            let needsUpdate = false;
+
+            // 1. Check/Convert 'date' to 'timestamp'
+            if (data.date && !data.timestamp) {
+              try {
+                // Convert YYYY-MM-DD string to Date object
+                updateData.timestamp = new Date(data.date);
+                needsUpdate = true;
+              } catch (e) {
+                console.warn(
+                  `Invalid date format for doc ${docSnap.id}: ${data.date}`
+                );
+              }
+            } else if (!data.timestamp) {
+              updateData.timestamp = serverTimestamp(); // Fallback if no date or timestamp
+              needsUpdate = true;
+            }
+
+            // 2. Check 'description'
+            if (!data.description) {
+              // Use 'transaction' field if it exists, otherwise default
+              updateData.description =
+                data.transaction || 'Ledger entry';
+              needsUpdate = true;
+            }
+
+            // 3. Check 'type'
+            if (!data.type) {
+              const amount = data.amount || 0;
+              // Simple check based on amount
+              updateData.type = amount >= 0 ? 'income' : 'expense';
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              batch.update(docSnap.ref, updateData);
+              updates++;
+            }
+          });
+
+          if (updates > 0) {
+            await batch.commit();
+            console.log(
+              `✅ Ledger standardized successfully. ${updates} documents updated.`
+            );
+          } else {
+            console.log(
+              '✅ Ledger is already up-to-date. No standardization needed.'
+            );
+          }
+        } catch (e) {
+          console.error('Error during ledger standardization: ', e);
+        }
+      }
+
+      // MODIFICATION 4: Removed old click listener
+
+      // --- Maintenance Tools ---
+      // 1️⃣ Run Ledger Standardization
+      const standardizeBtn = document.getElementById('standardizeBtn');
+      if (standardizeBtn) {
+        standardizeBtn.addEventListener('click', () => {
+          if (
+            confirm(
+              'This will clean and standardize all ledger entries. Continue?'
+            )
+          ) {
+            standardizeLedger();
+          }
+        });
+      }
+
+      // 2️⃣ Recalculate Finance Totals
+      const recalcBtn = document.getElementById(
+        'recalculateFinanceBtn'
+      );
+      if (recalcBtn) {
+        recalcBtn.addEventListener('click', async () => {
+          if (confirm('Recalculate all finance totals now?')) {
+            try {
+              await updateFinance();
+              // await calculateInventoryValue(); // This logic is already inside updateFinance()
+              alert('✅ Finance totals recalculated successfully.');
+            } catch (err) {
+              console.error('Error recalculating totals:', err);
+              alert('⚠️ Failed to recalculate totals.');
+            }
+          }
+        });
+      }
+
+      // 3️⃣ Clear Old Logs (older than 30 days)
+      const clearLogsBtn = document.getElementById('clearLogsBtn');
+      if (clearLogsBtn) {
+        clearLogsBtn.addEventListener('click', async () => {
+          if (
+            confirm(
+              'Delete all logs older than 30 days? This action cannot be undone.'
+            )
+          ) {
+            try {
+              const logsRef = collection(db, 'logs');
+              const snapshot = await getDocs(logsRef);
+              const now = new Date();
+              const cutoff =
+                now.getTime() - 30 * 24 * 60 * 60 * 1000; // 30 days
+              const batch = writeBatch(db);
+              let deletedCount = 0;
+              snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (
+                  data.timestamp &&
+                  data.timestamp.toMillis &&
+                  data.timestamp.toMillis() < cutoff
+                ) {
+                  batch.delete(docSnap.ref);
+                  deletedCount++;
+                }
+              });
+
+              if (deletedCount > 0) {
+                await batch.commit();
+                alert(
+                  `🧹 ${deletedCount} logs older than 30 days have been cleared.`
+                );
+              } else {
+                alert(
+                  '✅ No logs older than 30 days were found to clear.'
+                );
+              }
+            } catch (err) {
+              console.error('Error clearing logs:', err);
+              alert('⚠️ Failed to clear logs.');
+            }
+          }
+        });
+      }
+
+      // 4️⃣ Revalidate Inventory Status
+      const revalidateInventoryBtn = document.getElementById(
+        'revalidateInventoryBtn'
+      );
+      if (revalidateInventoryBtn) {
+        revalidateInventoryBtn.addEventListener('click', async () => {
+          if (confirm('Revalidate all inventory item statuses?')) {
+            try {
+              const invSnap = await getDocs(
+                collection(db, 'inventory')
+              );
+              const batch = writeBatch(db);
+              let updatedCount = 0;
+              invSnap.forEach((docSnap) => {
+                const item = docSnap.data();
+                let updatedStatus = item.status;
+
+                if (
+                  item.sold === true ||
+                  item.status === 'Sold' ||
+                  item.saleRef
+                ) {
+                  updatedStatus = 'Sold';
+                } else if (
+                  item.inTransit === true ||
+                  item.status === 'In Transit'
+                ) {
+                  updatedStatus = 'In Transit';
+                } else {
+                  updatedStatus = 'In Stock';
+                }
+
+                if (updatedStatus !== item.status) {
+                  batch.update(docSnap.ref, {
+                    status: updatedStatus,
+                  });
+                  updatedCount++;
+                }
+              });
+
+              if (updatedCount > 0) {
+                await batch.commit();
+                alert(
+                  `📋 ${updatedCount} inventory statuses revalidated successfully.`
+                );
+              } else {
+                alert(
+                  '✅ All inventory statuses are already correct.'
+                );
+              }
+            } catch (err) {
+              console.error('Error revalidating inventory:', err);
+              alert('⚠️ Failed to revalidate inventory.');
+            }
+          }
+        });
+      }
+
+      // --- Navigation ---
+      menuBtn.onclick = () => sidebar.classList.toggle('hidden');
+
+      navInventory.onclick = () => {
+        inventorySection.classList.remove('hidden');
+        ledgerSection.classList.add('hidden');
+        addBtn.classList.remove('hidden');
+        sidebar.classList.add('hidden');
+        pageTitle.textContent = 'Inventory';
+        addBtnLabel.textContent = 'Add New Item';
+      };
+
+      navLedger.onclick = () => {
+        ledgerSection.classList.remove('hidden');
+        inventorySection.classList.add('hidden');
+        addBtn.classList.add('hidden');
+        sidebar.classList.add('hidden');
+        pageTitle.textContent = 'Ledger';
+      };
+
+      // --- Helper Functions ---
+
+      // MODIFICATION 6: Added smooth transition modal functions
+      function showModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.classList.add('opacity-100'), 10); // 10ms delay to ensure 'hidden' is removed first
+      }
+
+      function hideModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('opacity-100');
+        setTimeout(() => modal.classList.add('hidden'), 300); // Wait for transition to finish
+      }
+
+      function clearItemForm() {
+        itemName.value = '';
+        itemTracking.value = '';
+        itemDetails.value = '';
+        itemCostPrice.value = '';
+        itemPurchaseDate.value = '';
+        itemImage.value = '';
+        itemStatus.value = 'In Stock';
+        itemStatus.disabled = false;
+        itemStatus.querySelector('option[value="Sold"]').disabled = true;
+        editingItemId = null;
+        itemModalTitle.textContent = 'Add New Item';
+        deleteItemBtn.classList.add('hidden');
+      }
+      function clearLedgerForm() {
+        ledgerDate.value = '';
+        ledgerTransaction.value = '';
+        ledgerAmount.value = '';
+        ledgerType.value = 'Income'; // This modal is for manual entries, types are different
+        editingLedgerId = null;
+        ledgerModalTitle.textContent = 'Add Transaction';
+        deleteLedgerBtn.classList.add('hidden');
+      }
+      function clearSellForm() {
+        sellPrice.value = '';
+        saleDateInput.value = '';
+        mpesaCode.value = '';
+        customerName.value = '';
+        customerPhone.value = '';
+        sellItemName.textContent = '';
+      }
+
+      // --- Firestore Data Operations (Manual Ledger entry) ---
+      async function addLedgerEntry(
+        date,
+        transaction,
+        amount,
+        type,
+        docId = null
+      ) {
+        if (!transaction || isNaN(amount) || amount === 0) return;
+        try {
+          const entry = {
+            date,
+            description: transaction,
+            amount: Math.round(amount),
+            type,
+            timestamp: serverTimestamp(),
+            user: auth.currentUser.email,
+          };
+
+          if (docId) {
+            const ledgerRef = doc(db, 'ledger', docId);
+            await updateDoc(ledgerRef, entry);
+          } else {
+            await addDoc(ledgerCol, entry);
+          }
+        } catch (e) {
+          console.error('Error writing ledger document: ', e);
+        }
+      }
+
+      // --- Item Modal Logic ---
+
+      function openAddItem() {
+        clearItemForm();
+        // MODIFICATION 6: Use showModal
+        showModal(itemModal);
+      }
+
+      window.openEditItem = (id) => {
+        const item = inventory.find((i) => i.id === id);
+        if (!item) return;
+
+        editingItemId = id;
+
+        itemModalTitle.textContent = 'Edit Item';
+        itemName.value = item.name;
+        itemTracking.value = item.tracking;
+        itemDetails.value = item.details;
+        itemCostPrice.value = item.costPrice;
+        itemPurchaseDate.value = item.purchaseDate || '';
+        itemImage.value = item.image || '';
+        itemStatus.value = item.status;
+
+        itemStatus.disabled = item.status === 'Sold';
+        itemStatus.querySelector('option[value="Sold"]').disabled =
+          item.status !== 'Sold';
+
+        deleteItemBtn.classList.remove('hidden');
+        // MODIFICATION 6: Use showModal
+        showModal(itemModal);
+      };
+
+      addBtn.onclick = openAddItem;
+      // MODIFICATION 6: Use hideModal
+      cancelItemBtn.onclick = () => {
+        hideModal(itemModal);
+        clearItemForm();
+      };
+      itemModal.onclick = (e) => {
+        if (e.target === itemModal) {
+          // MODIFICATION 6: Use hideModal
+          hideModal(itemModal);
+          clearItemForm();
+        }
+      };
+
+      saveItemBtn.onclick = async () => {
+        const name = itemName.value.trim();
+        const tracking = itemTracking.value.trim();
+        const details = itemDetails.value.trim();
+        const costPrice = parseFloat(itemCostPrice.value);
+        const status = itemStatus.value;
+        const purchaseDate =
+          itemPurchaseDate.value ||
+          new Date().toISOString().split('T')[0];
+        const image =
+          itemImage.value.trim() ||
+          `https://placehold.co/400x400/eeeeee/cccccc?text=${name.substring(
+            0,
+            10
+          )}`;
+
+        if (!name || !tracking || !details || isNaN(costPrice)) {
+          console.error(
+            'Validation Failed: Please fill all required fields.'
+          );
+          return;
+        }
+
+        const itemData = {
+          name,
+          tracking,
+          details,
+          costPrice: Math.round(costPrice),
+          status,
+          image,
+          purchaseDate,
+          user: auth.currentUser.email,
+        };
+
+        try {
+          if (editingItemId) {
+            // EDITING an existing item
+            const itemRef = doc(db, 'inventory', editingItemId);
+            const oldItem = inventory.find(
+              (i) => i.id === editingItemId
+            );
+            if (!oldItem) throw new Error('Item not found for edit.');
+
+            const costDifference = costPrice - oldItem.costPrice;
+            if (Math.abs(costDifference) > 0.01) {
+              const batch = writeBatch(db);
+              batch.update(itemRef, itemData);
+
+              const ledgerRef = doc(ledgerCol);
+              const transaction = `Cost Correction - ${name} (${tracking})`;
+              const type = costDifference > 0 ? 'expense' : 'income';
+              const ledgerEntry = {
+                type: type,
+                description: transaction,
+                amount: Math.abs(costDifference),
+                itemId: editingItemId,
+                timestamp: serverTimestamp(),
+                user: auth.currentUser.email,
+              };
+              batch.set(ledgerRef, ledgerEntry);
+
+              await batch.commit();
+              await logAction(
+                `Edited item ${oldItem.name}: cost ${oldItem.costPrice} -> ${costPrice}`
+              );
+            } else {
+              await updateDoc(itemRef, itemData);
+              await logAction(
+                `Edited item ${oldItem.name} (no cost change)`
+              );
+            }
+          } else {
+            // ADDING a new item (Use Batch Write)
+            const batch = writeBatch(db);
+
+            const newItemRef = doc(inventoryCol);
+            batch.set(newItemRef, itemData);
+
+            const ledgerRef = doc(ledgerCol);
+            const ledgerEntry = {
+              type: 'expense',
+              description: `Purchase of ${name}`,
+              amount: Math.round(costPrice),
+              itemId: newItemRef.id,
+              timestamp: serverTimestamp(),
+              user: auth.currentUser.email,
+            };
+            batch.set(ledgerRef, ledgerEntry);
+
+            await batch.commit();
+
+            await logAction(
+              `Added new item: ${name} (${tracking}) (ID: ${newItemRef.id})`
+            );
+          }
+        } catch (e) {
+          console.error('Error saving item: ', e);
+        }
+
+        // MODIFICATION 6: Use hideModal
+        hideModal(itemModal);
+        clearItemForm();
+      };
+
+      deleteItemBtn.onclick = async () => {
+        if (!editingItemId) return;
+
+        const item = inventory.find((i) => i.id === editingItemId);
+        if (!item) return;
+
+        try {
+          const batch = writeBatch(db);
+
+          const itemRef = doc(db, 'inventory', editingItemId);
+          batch.delete(itemRef);
+
+          const ledgerRef = doc(ledgerCol);
+          const ledgerEntry = {
+            type: 'deletion',
+            description: `Item deleted: ${item.name}`,
+            amount: null,
+            itemId: editingItemId,
+            timestamp: serverTimestamp(),
+            user: auth.currentUser.email,
+          };
+          batch.set(ledgerRef, ledgerEntry);
+
+          await batch.commit();
+
+          await logAction(
+            `Deleted item: ${item.name} (${item.tracking}) (ID: ${editingItemId})`
+          );
+        } catch (e) {
+          console.error('Error deleting item: ', e);
+        }
+
+        // MODIFICATION 6: Use hideModal
+        hideModal(itemModal);
+        clearItemForm();
+      };
+
+      // --- Ledger Modal Logic (Manual Entry) ---
+      function openAddLedger() {
+        clearLedgerForm();
+        // MODIFICATION 6: Use showModal
+        showModal(ledgerModal);
+      }
+
+      window.openEditLedger = (id) => {
+        const entry = ledger.find((e) => e.id === id);
+        if (!entry) return;
+
+        editingLedgerId = id;
+
+        ledgerModalTitle.textContent = 'Edit Transaction';
+        ledgerDate.value =
+          entry.date ||
+          entry.timestamp?.toDate().toISOString().split('T')[0] ||
+          '';
+        ledgerTransaction.value =
+          entry.description || entry.transaction;
+        ledgerAmount.value = entry.amount;
+        ledgerType.value = entry.type;
+
+        deleteLedgerBtn.classList.remove('hidden');
+        // MODIFICATION 6: Use showModal
+        showModal(ledgerModal);
+      };
+
+      addLedgerBtn.onclick = openAddLedger;
+      // MODIFICATION 6: Use hideModal
+      cancelLedgerBtn.onclick = () => {
+        hideModal(ledgerModal);
+        clearLedgerForm();
+      };
+      ledgerModal.onclick = (e) => {
+        if (e.target === ledgerModal) {
+          // MODIFICATION 6: Use hideModal
+          hideModal(ledgerModal);
+          clearLedgerForm();
+        }
+      };
+
+      saveLedgerBtn.onclick = async () => {
+        const date =
+          ledgerDate.value ||
+          new Date().toISOString().split('T')[0];
+        const transaction = ledgerTransaction.value.trim();
+        const amount = parseFloat(ledgerAmount.value);
+        const type = ledgerType.value;
+        if (!transaction || isNaN(amount)) return;
+
+        try {
+          await addLedgerEntry(
+            date,
+            transaction,
+            amount,
+            type,
+            editingLedgerId
+          );
+          if (editingLedgerId) {
+            await logAction(
+              `Edited transaction: ${transaction} (ID: ${editingLedgerId})`
+            );
+          } else {
+            await logAction(`Added transaction: ${transaction}`);
+          }
+        } catch (e) {
+          console.error('Error saving ledger entry: ', e);
+        }
+        // MODIFICATION 6: Use hideModal
+        hideModal(ledgerModal);
+        clearLedgerForm();
+      };
+
+      deleteLedgerBtn.onclick = async () => {
+        if (!editingLedgerId) return;
+
+        try {
+          const entry = ledger.find((e) => e.id === editingLedgerId);
+          const ledgerRef = doc(db, 'ledger', editingLedgerId);
+          await deleteDoc(ledgerRef);
+          await logAction(
+            `Deleted transaction: ${
+              entry.description || entry.transaction
+            } (ID: ${editingLedgerId})`
+          );
+        } catch (e) {
+          console.error('Error deleting ledger entry: ', e);
+        }
+
+        // MODIFICATION 6: Use hideModal
+        hideModal(ledgerModal);
+        clearLedgerForm();
+      };
+
+      // --- Sell Modal Logic ---
+
+      let selectedItemId = null;
+      window.openSell = (id) => {
+        const item = inventory.find((i) => i.id === id);
+        if (!item || item.status === 'Sold') return;
+
+        selectedItemId = id;
+        sellItemName.textContent = `${item.name} — Tracking: ${item.tracking}`;
+        sellPrice.value = item.sellingPrice || '';
+        saleDateInput.value = new Date().toISOString().split('T')[0];
+        // MODIFICATION 6: Use showModal
+        showModal(sellModal);
+      };
+      // MODIFICATION 6: Use hideModal
+      cancelSellBtn.onclick = () => {
+        hideModal(sellModal);
+        clearSellForm();
+        selectedItemId = null;
+      };
+      sellModal.onclick = (e) => {
+        if (e.target === sellModal) {
+          // MODIFICATION 6: Use hideModal
+          hideModal(sellModal);
+          clearSellForm();
+          selectedItemId = null;
+        }
+      };
+
+      confirmSellBtn.onclick = async () => {
+        const price = parseFloat(sellPrice.value);
+        const code = mpesaCode.value.trim();
+        const cust = customerName.value.trim();
+        const phone = customerPhone.value.trim();
+        const saleDate =
+          saleDateInput.value ||
+          new Date().toISOString().split('T')[0];
+
+        if (isNaN(price) || !code || !cust || !phone) {
+          console.error(
+            'Validation Failed: Please fill all sale fields.'
+          );
+          return;
+        }
+        if (!selectedItemId) return;
+
+        const item = inventory.find((i) => i.id === selectedItemId);
+        if (!item || item.status === 'Sold') return;
+
+        const saleData = {
+          itemId: item.id,
+          itemName: item.name,
+          itemTracking: item.tracking,
+          itemDetails: item.details,
+          itemCostPrice: item.costPrice,
+          soldPrice: Math.round(price),
+          mpesaCode: code,
+          customerName: cust,
+          customerPhone: phone,
+          saleDate: saleDate,
+          user: auth.currentUser.email,
+        };
+
+        try {
+          const batch = writeBatch(db);
+
+          const saleDocRef = doc(salesCol);
+          batch.set(saleDocRef, saleData);
+
+          const itemRef = doc(db, 'inventory', item.id);
+          batch.update(itemRef, {
+            status: 'Sold',
+            saleRef: saleDocRef.id,
+            sellingPrice: Math.round(price),
+          });
+
+          const incomeLedgerRef = doc(ledgerCol);
+          const incomeLedgerEntry = {
+            type: 'income',
+            description: `Sale of ${item.name}`,
+            amount: Math.round(price),
+            itemId: item.id,
+            timestamp: serverTimestamp(),
+            user: auth.currentUser.email,
+            customerName: cust,
+            customerPhone: phone,
+            mpesaCode: code,
+          };
+          batch.set(incomeLedgerRef, incomeLedgerEntry);
+
+          const cogsLedgerRef = doc(ledgerCol);
+          const costTransaction = `COGS - ${item.name} (${item.tracking})`;
+          const cogsLedgerEntry = {
+            type: 'expense',
+            description: costTransaction,
+            amount: item.costPrice,
+            itemId: item.id,
+            timestamp: serverTimestamp(),
+            user: auth.currentUser.email,
+          };
+          batch.set(cogsLedgerRef, cogsLedgerEntry);
+
+          await batch.commit();
+
+          await logAction(
+            `Sold item: ${item.name} (Ref: ${saleDocRef.id})`
+          );
+
+          const updatedItem = {
+            ...item,
+            status: 'Sold',
+            saleRef: saleDocRef.id,
+            sellingPrice: Math.round(price),
+          };
+          currentItemForReceipt = updatedItem;
+          openDetails(updatedItem.id);
+        } catch (e) {
+          console.error('Error processing sale: ', e);
+        }
+
+        // MODIFICATION 6: Use hideModal
+        hideModal(sellModal);
+        clearSellForm();
+        selectedItemId = null;
+      };
+
+      // --- Details Modal Logic ---
+      window.openDetails = async (id) => {
+        let item =
+          currentItemForReceipt && currentItemForReceipt.id === id
+            ? currentItemForReceipt
+            : inventory.find((i) => i.id === id);
+
+        if (!item) return;
+
+        currentItemForReceipt = item;
+
+        document.getElementById('detailsModalName').textContent =
+          item.name;
+        document.getElementById('detailsModalTracking').textContent =
+          item.tracking;
+        document.getElementById('detailsModalPrice').textContent =
+          `KES ${
+            item.sellingPrice
+              ? item.sellingPrice.toLocaleString()
+              : 'N/A'
+          }`;
+        document.getElementById(
+          'detailsModalCostPrice'
+        ).textContent = `Cost: KES ${item.costPrice.toLocaleString()}`;
+        const costPriceEl = document.getElementById(
+          'detailsModalCostPrice'
+        );
+        while (
+          costPriceEl.nextSibling &&
+          costPriceEl.nextSibling.tagName === 'P'
+        ) {
+          costPriceEl.nextSibling.remove();
+        }
+        costPriceEl.insertAdjacentHTML(
+          'afterend',
+          `<p class="text-sm text-gray-500 dark:text-gray-400">Purchase Date: ${
+            item.purchaseDate || ''
+          }</p>`
+        );
+
+        document.getElementById('detailsModalDetails').textContent =
+          item.details;
+        document.getElementById('detailsModalImage').src = item.image;
+        document.getElementById('detailsModalImage').onerror = () => {
+          document.getElementById('detailsModalImage').src =
+            'https://placehold.co/400x400/eeeeee/cccccc?text=Image';
+        };
+
+        const statusEl = document.getElementById('detailsModalStatus');
+        statusEl.textContent = item.status;
+        statusEl.className = 'px-2 py-1 text-xs rounded-full ';
+        switch (item.status) {
+          case 'In Stock':
+            statusEl.className += 'bg-success/20 text-green-800';
+            break;
+          case 'In Transit':
+            statusEl.className += 'bg-warning/20 text-yellow-800';
+            break;
+          case 'Sold':
+            statusEl.className += 'bg-danger/20 text-red-800';
+            break;
+        }
+
+        const customerInfoEl = document.getElementById(
+          'detailsModalCustomerInfo'
+        );
+
+        if (item.status === 'Sold' && item.saleRef) {
+          try {
+            const saleRef = doc(db, 'sales', item.saleRef);
+            const saleSnap = await getDoc(saleRef);
+
+            if (saleSnap.exists()) {
+              const info = saleSnap.data();
+              document.getElementById(
+                'detailsModalSoldPrice'
+              ).textContent = `KES ${info.soldPrice.toLocaleString()}`;
+              document.getElementById(
+                'detailsModalCustomerName'
+              ).textContent = info.customerName;
+              document.getElementById(
+                'detailsModalCustomerPhone'
+              ).textContent = info.customerPhone;
+              document.getElementById('detailsModalMpesa').textContent =
+                info.mpesaCode;
+              document.getElementById(
+                'detailsModalSaleDate'
+              ).textContent = info.saleDate;
+              customerInfoEl.classList.remove('hidden');
+              currentItemForReceipt.saleInfo = info;
+
+              const profit = info.soldPrice - item.costPrice;
+              document
+                .getElementById('detailsModalDetails')
+                .insertAdjacentHTML(
+                  'beforeend',
+                  `<p class="text-sm ${
+                    profit >= 0
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
+                  } mt-2">Profit: KES ${profit.toLocaleString()}</p>`
+                );
+            } else {
+              console.warn('Sale record not found for item:', item.id);
+              customerInfoEl.classList.add('hidden');
+              currentItemForReceipt.saleInfo = null;
+            }
+          } catch (e) {
+            console.error('Error fetching sale details:', e);
+            customerInfoEl.classList.add('hidden');
+            currentItemForReceipt.saleInfo = null;
+          }
+        } else {
+          customerInfoEl.classList.add('hidden');
+          currentItemForReceipt.saleInfo = null;
+        }
+
+        // MODIFICATION 6: Use showModal
+        showModal(detailsModal);
+      };
+      // MODIFICATION 6: Use hideModal
+      closeDetailsBtn.onclick = () => {
+        hideModal(detailsModal);
+        currentItemForReceipt = null;
+      };
+      detailsModal.onclick = (e) => {
+        if (e.target === detailsModal) {
+          // MODIFICATION 6: Use hideModal
+          hideModal(detailsModal);
+          currentItemForReceipt = null;
+        }
+      };
+
+      // Receipt Download
+      downloadReceiptBtn.onclick = () => {
+        if (!currentItemForReceipt || !currentItemForReceipt.saleInfo)
+          return;
+
+        const item = currentItemForReceipt;
+        const info = item.saleInfo;
+
+        const receiptHTML = `
+          <html>
+            <head>
+              <title>Receipt - ${item.tracking}</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: auto; color: #000; }
+                h1 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; font-weight: 600; font-size: 1.2rem; }
+                .receipt-section { margin-bottom: 20px; }
+                .receipt-section h2 { font-size: 1.1em; color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; font-weight: 600; }
+                .detail-grid { display: grid; grid-template-columns: 120px 1fr; gap: 5px; }
+                .detail-grid strong { font-weight: 500; color: #222; }
+                .detail-grid span { color: #444; }
+                .total { font-size: 1.3em; font-weight: 700; color: #000; text-align: right; margin-top: 20px; }
+                .footer { margin-top: 30px; text-align: center; font-size: 0.9em; color: #777; }
+                @media print {
+                  body { padding: 0; }
+                  h1 { font-size: 1.5rem; }
+                }
+              </style>
+            </head>
+            <body>
+              <div style="text-align:center;">
+                <img src="https://i.postimg.cc/Qxg0rJnW/Screenshot-20250713-185029-Tik-Tok.png" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;">
+                <h1>TechTok Solutions – Official Receipt</h1>
+              </div>
+              
+              <div class="receipt-section">
+                <h2>Sale & Customer Details</h2>
+                <div class="detail-grid">
+                  <strong>Sale Date:</strong> <span>${info.saleDate}</span>
+                  <strong>Customer:</strong> <span>${info.customerName}</span>
+                  <strong>Phone:</strong> <span>${info.customerPhone}</span>
+                </div>
+              </div>
+
+              <div class="receipt-section">
+                <h2>Item Details</h2>
+                <div class="detail-grid">
+                  <strong>Item:</strong> <span>${info.itemName}</span>
+                  <strong>Tracking:</strong> <span>${info.itemTracking}</span>
+                  <strong>Details:</strong> <span>${info.itemDetails}</span>
+                </div>
+              </div>
+              
+              <div class="receipt-section">
+                <h2>Payment Details</h2>
+                <div class="detail-grid">
+                  <strong>M-Pesa Code:</strong> <span>${info.mpesaCode}</span>
+                </div>
+                <div class="total">
+                  Amount Paid: KES ${info.soldPrice.toLocaleString()}
+                </div>
+              </div>
+
+              <div class="footer">
+                Thank you for your purchase!
+              </div>
+            </body>
+          </html>
+        `;
+
+        const printWindow = window.open('', '_blank');
+        printWindow.document.open();
+        printWindow.document.write(receiptHTML);
+        printWindow.document.close();
+
+        printWindow.onload = function () {
+          printWindow.print();
+        };
+      };
+
+      // --- Search & Filter ---
+
+      searchInput.addEventListener('input', (e) => {
+        renderInventory(e.target.value);
+      });
+
+      filterStatusBtn.onclick = () => {
+        if (currentStatusFilter === 'All') {
+          currentStatusFilter = 'In Stock';
+        } else if (currentStatusFilter === 'In Stock') {
+          currentStatusFilter = 'In Transit';
+        } else if (currentStatusFilter === 'In Transit') {
+          currentStatusFilter = 'Sold';
+        } else {
+          currentStatusFilter = 'All';
+        }
+
+        if (currentStatusFilter === 'All') {
+          filterStatusBtn.textContent = 'Status';
+          filterStatusBtn.classList.remove('bg-primary', 'text-white');
+        } else {
+          filterStatusBtn.textContent = `Status: ${currentStatusFilter}`;
+          filterStatusBtn.classList.add('bg-primary', 'text-white');
+        }
+
+        renderInventory(searchInput.value);
+      };
+    </script>
+
+    <!-- 
+      NEW: Electron API Script
+      This script connects the UI (buttons) to the 'electronAPI'
+      we exposed in preload.js.
+    -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // --- Title Bar Controls ---
+        document
+          .getElementById('minimize-btn')
+          ?.addEventListener('click', () => {
+            window.electronAPI.minimize();
+          });
+        document
+          .getElementById('maximize-btn')
+          ?.addEventListener('click', () => {
+            window.electronAPI.maximize();
+          });
+        document
+          .getElementById('close-btn')
+          ?.addEventListener('click', () => {
+            window.electronAPI.close();
+          });
+
+        // --- Auto-Update Controls ---
+        document
+          .getElementById('restart-app-btn')
+          ?.addEventListener('click', () => {
+            window.electronAPI.restartApp();
+          });
+
+        // --- Theme Synchronization ---
+        // 1. Set initial theme on load
+        window.electronAPI.getInitialTheme().then((isDarkMode) => {
+          document.documentElement.classList.toggle('dark', isDarkMode);
+        });
+
+        // 2. Listen for OS theme changes
+        window.electronAPI.onThemeUpdated((isDarkMode) => {
+          document.documentElement.classList.toggle('dark', isDarkMode);
+        });
+
+        // 3. Listen for update downloaded
+        window.electronAPI.onUpdateDownloaded(() => {
+          document
+            .getElementById('update-notification')
+            ?.classList.remove('hidden');
+        });
+      });
+    </script>
+  </body>
+</html>
